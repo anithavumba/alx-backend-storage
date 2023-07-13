@@ -1,5 +1,18 @@
--- This SQL script select band_name, and lifespan column which is difference
-SELECT band_name, (IFNULL(split, '2020') - formed) AS lifespan
-    FROM metal_bands
-    WHERE FIND_IN_SET('Glam rock', IFNULL(style, "")) > 0
-    ORDER BY lifespan DESC;
+-- Create a temporary table to store the lifespan calculation
+CREATE TEMPORARY TABLE temp_bands (
+    band_name VARCHAR(100),
+    formed INT,
+    split INT,
+    lifespan INT
+);
+
+-- Populate the temporary table by calculating the lifespan for each band
+INSERT INTO temp_bands (band_name, formed, split, lifespan)
+SELECT band_name, formed, split, (2022 - formed) - split AS lifespan
+FROM metal_bands
+WHERE style = 'Glam rock';
+
+-- Retrieve the bands ranked by longevity
+SELECT band_name, lifespan
+FROM temp_bands
+ORDER BY lifespan DESC;
