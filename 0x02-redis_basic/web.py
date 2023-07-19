@@ -1,40 +1,36 @@
 #!/usr/bin/env python3
+"""
+web cache and tracker
+"""
 import requests
-import time
-from datetime import datetime, timedelta
+import redis
 from functools import wraps
 
-CACHE_EXPIRATION_SECONDS = 10
-CACHE = {}
+store = redis.Redis()
 
-def caching_decorator(func):
-    @wraps(func)
+
+def count_url_access(method):
+    """ Decorator counting how many times
+    a URL is accessed """
+    @wraps(method)
     def wrapper(url):
-        now = datetime.now()
-        cache_key = f"cache:{url}"
-        
-        # Check if the cached data is still valid
-        if cache_key in CACHE and CACHE[cache_key]['expires'] > now:
-            return CACHE[cache_key]['content']
-        
-        # If not cached or expired, fetch the page and update the cache
-        response = func(url)
-        CACHE[cache_key] = {
-            'content': response,
-            'expires': now + timedelta(seconds=CACHE_EXPIRATION_SECONDS)
-        }
-        return response
+        cached_key = "cached:" + url
+        cached_data = store.get(cached_key)
+        if cached_data:
+            return cached_data.decode("utf-8")
+
+        count_key = "count:" + url
+        html = method(url)
+
+        store.incr(count_key)
+        store.set(cached_key, html)
+        store.expire(cached_key, 10)
+        return html
     return wrapper
 
-@caching_decorator
-def get_page(url):
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.text
-    return ""
 
-if __name__ == "__main__":
-    url = "http://slowwly.robertomurray.co.uk/delay/1000/url/https://www.example.com"
-    print(get_page(url))
-    time.sleep(5)  # Wait 5 seconds to allow cache to expire
-    print(get_page(url))
+@count_url_access
+def get_page(url: str) -> str:
+    """ Returns HTML content of a url """
+    res = requests.get(url)
+    return res.text
