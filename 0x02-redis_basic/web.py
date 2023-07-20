@@ -1,35 +1,46 @@
-#!/usr/bin/env python3
-""" Tracker callls """
-
-import redis
 import requests
-from typing import Callable
-from functools import wraps
+import time
 
-r = redis.Redis()
+# Dictionary to keep track of the count of URL accesses
+url_count = {}
 
+# Dictionary to store the cached content and timestamps
+cache = {}
 
-def count_calls(method: Callable) -> Callable:
-    """ Decorator to know the number of calls """
-
-    @wraps(method)
+# Decorator for tracking URL accesses
+def track_url_access(func):
     def wrapper(url):
-        """ Wrapper decorator """
-        r.incr(f"count:{url}")
-        cached_html = r.get(f"cached:{url}")
-        if cached_html:
-            return cached_html.decode('utf-8')
-
-        html = method(url)
-        r.setex(f"cached:{url}", 10, html)
-        return html
-
+        # Check if the URL has been accessed before
+        if url in url_count:
+            url_count[url] += 1
+        else:
+            url_count[url] = 1
+        return func(url)
     return wrapper
 
+# Decorator for caching URL content with a 10-second expiration time
+def cache_url_content(func):
+    def wrapper(url):
+        # Check if the URL content is already cached
+        if 'content:{url}' in cache and 'timestamp:{url}' in cache:
+            timestamp = cache['timestamp:{url}']
+            current_time = int(time.time())
+            # If the cached content is still valid (within 10 seconds), return it
+            if current_time - timestamp < 10:
+                return cache['content:{url}']
+        
+        # If the URL content is not cached or expired, fetch it
+        response = func(url)
+        
+        # Cache the fetched content and its timestamp
+        cache['content:{url}'] = response
+        cache['timestamp:{url}'] = int(time.time())
+        
+        return response
+    return wrapper
 
-@count_calls
+@track_url_access
+@cache_url_content
 def get_page(url: str) -> str:
-    """ Get page
-    """
-    req = requests.get(url)
-    return req.text
+    response = requests.get(url)
+    return response.text
