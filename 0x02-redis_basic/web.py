@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-import requests
+iimport requests
 import time
+from typing import Callable
+from functools import wraps
 
 # Dictionary to keep track of the count of URL accesses
 url_count = {}
@@ -37,8 +39,21 @@ def cache_url_content(func):
         cache['content:{url}'] = response
         cache['timestamp:{url}'] = int(time.time())
         
+        # Remove the cached content after 10 seconds
+        remove_cache_after_10_seconds(url)
+        
         return response
     return wrapper
+
+def remove_cache_after_10_seconds(url):
+    # Check if the cached content exists and its timestamp
+    if 'content:{url}' in cache and 'timestamp:{url}' in cache:
+        timestamp = cache['timestamp:{url}']
+        current_time = int(time.time())
+        # If the cached content is expired (more than 10 seconds old), remove it
+        if current_time - timestamp >= 10:
+            del cache['content:{url}']
+            del cache['timestamp:{url}']
 
 @track_url_access
 @cache_url_content
