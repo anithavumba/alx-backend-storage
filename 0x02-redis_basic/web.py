@@ -21,7 +21,7 @@ def count_calls(method: Callable) -> Callable:
             return cached_html.decode('utf-8')
 
         html = method(url)
-        r.setex(f"cached:{url}", 10, html)
+        r.setex(f"cached:{url}", 10, html)  # Swap the arguments here
         return html
 
     return wrapper
