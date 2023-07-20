@@ -1,62 +1,35 @@
 #!/usr/bin/env python3
-iimport requests
-import time
+""" Tracker callls """
+
+import redis
+import requests
 from typing import Callable
 from functools import wraps
 
-# Dictionary to keep track of the count of URL accesses
-url_count = {}
+r = redis.Redis()
 
-# Dictionary to store the cached content and timestamps
-cache = {}
 
-# Decorator for tracking URL accesses
-def track_url_access(func):
+def count_calls(method: Callable) -> Callable:
+    """ Decorator to know the number of calls """
+
+    @wraps(method)
     def wrapper(url):
-        # Check if the URL has been accessed before
-        if url in url_count:
-            url_count[url] += 1
-        else:
-            url_count[url] = 1
-        return func(url)
+        """ Wrapper decorator """
+        r.incr(f"count:{url}")
+        cached_html = r.get(f"cached:{url}")
+        if cached_html:
+            return cached_html.decode('utf-8')
+
+        html = method(url)
+        r.setex(f"cached:{url}", 10, html)
+        return html
+
     return wrapper
 
-# Decorator for caching URL content with a 10-second expiration time
-def cache_url_content(func):
-    def wrapper(url):
-        # Check if the URL content is already cached
-        if 'content:{url}' in cache and 'timestamp:{url}' in cache:
-            timestamp = cache['timestamp:{url}']
-            current_time = int(time.time())
-            # If the cached content is still valid (within 10 seconds), return it
-            if current_time - timestamp < 10:
-                return cache['content:{url}']
-        
-        # If the URL content is not cached or expired, fetch it
-        response = func(url)
-        
-        # Cache the fetched content and its timestamp
-        cache['content:{url}'] = response
-        cache['timestamp:{url}'] = int(time.time())
-        
-        # Remove the cached content after 10 seconds
-        remove_cache_after_10_seconds(url)
-        
-        return response
-    return wrapper
 
-def remove_cache_after_10_seconds(url):
-    # Check if the cached content exists and its timestamp
-    if 'content:{url}' in cache and 'timestamp:{url}' in cache:
-        timestamp = cache['timestamp:{url}']
-        current_time = int(time.time())
-        # If the cached content is expired (more than 10 seconds old), remove it
-        if current_time - timestamp >= 10:
-            del cache['content:{url}']
-            del cache['timestamp:{url}']
-
-@track_url_access
-@cache_url_content
+@count_calls
 def get_page(url: str) -> str:
-    response = requests.get(url)
-    return response.text
+    """ Get page
+    """
+    req = requests.get(url)
+    return req.text
