@@ -8,9 +8,8 @@ from functools import wraps
 
 r = redis.Redis()
 
-
 def count_calls(method: Callable) -> Callable:
-    """ Decorator to know the number of calls """
+    """ Decorator to track the number of calls """
 
     @wraps(method)
     def wrapper(url):
@@ -21,15 +20,19 @@ def count_calls(method: Callable) -> Callable:
             return cached_html.decode('utf-8')
 
         html = method(url)
-        r.setex(f"cached:{url}", 10, html)  # Swap the arguments here
+        r.setex(f"cached:{url}", 10, html)
         return html
 
     return wrapper
 
-
 @count_calls
 def get_page(url: str) -> str:
-    """ Get page
-    """
+    """ Get page """
     req = requests.get(url)
     return req.text
+
+if __name__ == "__main__":
+    # Test with a more reliable and faster server for caching
+    result = get_page("http://www.example.com")
+    print(result)
+
